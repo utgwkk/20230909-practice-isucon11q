@@ -572,6 +572,13 @@ func getIsuList(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, responseList)
 }
+func pickPostIsuConditionTargetUrl(id int) string {
+	xs := []string{
+		"https://isucondition-1.t.isucon.dev",
+		"https://isucondition-3.t.isucon.dev",
+	}
+	return xs[id%2]
+}
 
 // POST /api/isu
 // ISUを登録
@@ -629,7 +636,7 @@ func postIsu(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.ExecContext(ctx, "INSERT INTO `isu`"+
+	dbRes, err := tx.ExecContext(ctx, "INSERT INTO `isu`"+
 		"	(`jia_isu_uuid`, `name`, `image`, `jia_user_id`) VALUES (?, ?, ?, ?)",
 		jiaIsuUUID, isuName, image, jiaUserID)
 	if err != nil {
@@ -642,9 +649,14 @@ func postIsu(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+	lastInsertId, err := dbRes.LastInsertId()
+	if err != nil {
+		c.Logger().Errorf("db error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
 
 	targetURL := getJIAServiceURL(ctx, tx) + "/api/activate"
-	body := JIAServiceRequest{postIsuConditionTargetBaseURL, jiaIsuUUID}
+	body := JIAServiceRequest{pickPostIsuConditionTargetUrl(int(lastInsertId)), jiaIsuUUID}
 	bodyJSON, err := json.Marshal(body)
 	if err != nil {
 		c.Logger().Error(err)
