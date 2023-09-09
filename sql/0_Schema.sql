@@ -36,15 +36,3 @@ CREATE TABLE `isu_association_config` (
   `name` VARCHAR(255) PRIMARY KEY,
   `url` VARCHAR(255) NOT NULL UNIQUE
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
-
-DROP TABLE IF EXISTS `isu_last_condition`;
-CREATE TABLE `isu_last_condition` (
-  `jia_isu_uuid` CHAR(36) NOT NULL,
-  `timestamp` DATETIME NOT NULL,
-  `is_sitting` TINYINT(1) NOT NULL,
-  `condition` VARCHAR(255) NOT NULL,
-  `condition_level` ENUM('info', 'warning', 'critical') NOT NULL,
-  `message` VARCHAR(255) NOT NULL,
-  `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
-  PRIMARY KEY (`jia_isu_uuid`)
-) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;

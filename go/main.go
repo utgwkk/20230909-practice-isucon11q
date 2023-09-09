@@ -371,29 +371,6 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
-	allConditions := []IsuCondition{}
-	if err := db.SelectContext(ctx, &allConditions, "SELECT * FROM `isu_condition`"); err != nil {
-		c.Logger().Errorf("db error : %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	latestConditionById := make(map[string]IsuCondition)
-	for _, cond := range allConditions {
-		if cond.Timestamp.After(latestConditionById[cond.JIAIsuUUID].Timestamp) {
-			latestConditionById[cond.JIAIsuUUID] = cond
-		}
-	}
-	if len(allConditions) > 0 {
-		if _, err := db.NamedExecContext(ctx,
-			"INSERT INTO `isu_last_condition`"+
-				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
-				"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
-			maps.Values(latestConditionById),
-		); err != nil {
-			c.Logger().Errorf("db error : %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-	}
-
 	_, err = db.ExecContext(ctx,
 		"INSERT INTO `isu_association_config` (`name`, `url`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `url` = VALUES(`url`)",
 		"jia_service_url",
@@ -543,31 +520,21 @@ func getIsuList(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
-	isuIds := make([]string, len(isuList))
-	for i, isu := range isuList {
-		isuIds[i] = isu.JIAIsuUUID
-	}
-	lastConditionByIsuId := make(map[string]IsuCondition)
-	if len(isuIds) > 0 {
-		query, args, err := sqlx.In("SELECT * FROM `isu_last_condition` WHERE `jia_isu_uuid` IN (?)", isuIds)
-		if err != nil {
-			c.Logger().Errorf("query error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-		conditions := []IsuCondition{}
-		if err := tx.SelectContext(ctx, &conditions, query, args...); err != nil {
-			c.Logger().Errorf("db error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-
-		for _, cond := range conditions {
-			lastConditionByIsuId[cond.JIAIsuUUID] = cond
-		}
-	}
 
 	responseList := []GetIsuListResponse{}
 	for _, isu := range isuList {
-		lastCondition, foundLastCondition := lastConditionByIsuId[isu.JIAIsuUUID]
+		var lastCondition IsuCondition
+		foundLastCondition := true
+		err = tx.GetContext(ctx, &lastCondition, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` DESC LIMIT 1",
+			isu.JIAIsuUUID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				foundLastCondition = false
+			} else {
+				c.Logger().Errorf("db error: %v", err)
+				return c.NoContent(http.StatusInternalServerError)
+			}
+		}
 
 		var formattedCondition *GetIsuConditionResponse
 		if foundLastCondition {
@@ -1294,12 +1261,6 @@ func postIsuCondition(c echo.Context) error {
 	logger := c.Echo().Logger
 	go func() {
 		ctx := context.WithoutCancel(ctx)
-		tx, err := db.Beginx()
-		if err != nil {
-			logger.Errorf("db error: %v", err)
-			return
-		}
-		defer tx.Rollback()
 		var rows []IsuCondition
 		for _, cond := range req {
 			timestamp := time.Unix(cond.Timestamp, 0)
@@ -1326,7 +1287,7 @@ func postIsuCondition(c echo.Context) error {
 		}
 
 		if len(rows) > 0 {
-			_, err = tx.NamedExecContext(ctx,
+			_, err = db.NamedExecContext(ctx,
 				"INSERT INTO `isu_condition`"+
 					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
 					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
@@ -1335,32 +1296,6 @@ func postIsuCondition(c echo.Context) error {
 				logger.Errorf("db error: %v", err)
 				return
 			}
-
-			// timestampでソート
-			sort.SliceStable(rows, func(i, j int) bool {
-				return rows[i].Timestamp.Before(rows[j].Timestamp)
-			})
-			lastData := rows[len(rows)-1]
-			_, err = tx.NamedExecContext(ctx,
-				"INSERT INTO `isu_last_condition`"+
-					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
-					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"+
-					"   ON DUPLICATE KEY UPDATE "+
-					"`timestamp` = VALUES(`timestamp`), "+
-					"`is_sitting` = VALUES(`is_sitting`), "+
-					"`condition` = VALUES(`condition`), "+
-					"`condition_level` = VALUES(`condition_level`), "+
-					"`message` = VALUES(`message`)",
-				lastData)
-			if err != nil {
-				logger.Errorf("db error: %v", err)
-				return
-			}
-		}
-
-		if err := tx.Commit(); err != nil {
-			logger.Errorf("db error: %v", err)
-			return
 		}
 	}()
 
