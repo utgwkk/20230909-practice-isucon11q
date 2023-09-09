@@ -79,7 +79,7 @@ type Isu struct {
 	UpdatedAt  time.Time `db:"updated_at" json:"-"`
 }
 
-const IsuColumnsExceptImage = "`id`, `jia_isu_uuid`, `name`, `character`, `jia_user_id`, `created_at, `updated_at`"
+const IsuColumnsExceptImage = "`id`, `jia_isu_uuid`, `name`, `character`, `jia_user_id`, `created_at`, `updated_at`"
 
 type IsuFromJIA struct {
 	Character string `json:"character"`
