@@ -1228,6 +1228,7 @@ func getTrend(c echo.Context) error {
 			})
 	}
 
+	c.Response().Header().Add("Cache-Control", "public, max-age=1")
 	return c.JSON(http.StatusOK, res)
 }
 
