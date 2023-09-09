@@ -1350,7 +1350,7 @@ func postIsuCondition(c echo.Context) error {
 					"`is_sitting` = VALUES(`is_sitting`), "+
 					"`condition` = VALUES(`condition`), "+
 					"`condition_level` = VALUES(`condition_level`), "+
-					"`message` = VALUES(`message`), ",
+					"`message` = VALUES(`message`)",
 				lastData)
 			if err != nil {
 				logger.Errorf("db error: %v", err)
