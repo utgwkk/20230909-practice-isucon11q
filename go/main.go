@@ -585,21 +585,9 @@ func postIsu(c echo.Context) error {
 	}
 	defer tx.Rollback()
 
-	query, args, err := dialect.
-		Insert("isu").
-		Rows(goqu.Record{
-			"jia_isu_uuid": jiaIsuUUID,
-			"name": isuName,
-			"image": image,
-			"jia_user_id": jiaUserID,
-		}).
-		ToSQL()
-	if err != nil {
-		c.Logger().Errorf("query error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-
-	_, err = tx.ExecContext(ctx, query, args...)
+	_, err = tx.ExecContext(ctx, "INSERT INTO `isu`"+
+		"	(`jia_isu_uuid`, `name`, `image`, `jia_user_id`) VALUES (?, ?, ?, ?)",
+		jiaIsuUUID, isuName, image, jiaUserID)
 	if err != nil {
 		mysqlErr, ok := err.(*mysql.MySQLError)
 
