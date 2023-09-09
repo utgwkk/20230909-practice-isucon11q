@@ -1248,15 +1248,8 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "bad request body")
 	}
 
-	tx, err := db.Beginx()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
-	defer tx.Rollback()
-
 	var count int
-	err = tx.GetContext(ctx, &count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
+	err = db.GetContext(ctx, &count, "SELECT COUNT(*) FROM `isu` WHERE `jia_isu_uuid` = ?", jiaIsuUUID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
@@ -1265,46 +1258,46 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
-	var rows []IsuCondition
-	for _, cond := range req {
-		timestamp := time.Unix(cond.Timestamp, 0)
+	logger := c.Echo().Logger
+	go func() {
+		ctx := context.WithoutCancel(ctx)
+		var rows []IsuCondition
+		for _, cond := range req {
+			timestamp := time.Unix(cond.Timestamp, 0)
 
-		if !isValidConditionFormat(cond.Condition) {
-			return c.String(http.StatusBadRequest, "bad request body")
+			if !isValidConditionFormat(cond.Condition) {
+				logger.Warn("bad request body")
+				return
+			}
+
+			conditionLevel, err := calculateConditionLevel(cond.Condition)
+			if err != nil {
+				logger.Warn("bad request body")
+				return
+			}
+
+			rows = append(rows, IsuCondition{
+				JIAIsuUUID:     jiaIsuUUID,
+				Timestamp:      timestamp,
+				IsSitting:      cond.IsSitting,
+				Condition:      cond.Condition,
+				ConditionLevel: conditionLevel,
+				Message:        cond.Message,
+			})
 		}
 
-		conditionLevel, err := calculateConditionLevel(cond.Condition)
-		if err != nil {
-			return c.String(http.StatusBadRequest, "bad request body")
+		if len(rows) > 0 {
+			_, err = db.NamedExecContext(ctx,
+				"INSERT INTO `isu_condition`"+
+					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
+					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
+				rows)
+			if err != nil {
+				logger.Errorf("db error: %v", err)
+				return
+			}
 		}
-
-		rows = append(rows, IsuCondition{
-			JIAIsuUUID:     jiaIsuUUID,
-			Timestamp:      timestamp,
-			IsSitting:      cond.IsSitting,
-			Condition:      cond.Condition,
-			ConditionLevel: conditionLevel,
-			Message:        cond.Message,
-		})
-	}
-
-	if len(rows) > 0 {
-		_, err = tx.NamedExecContext(ctx,
-			"INSERT INTO `isu_condition`"+
-				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
-				"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
-			rows)
-		if err != nil {
-			c.Logger().Errorf("db error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	}()
 
 	return c.NoContent(http.StatusAccepted)
 }
