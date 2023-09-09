@@ -7,3 +7,6 @@ UPDATE `isu_condition` SET `condition_level` = (
     ELSE 'critical'
     END
 );
+
+ALTER TABLE `isu_condition` DROP COLUMN `id`;
+ALTER TABLE `isu_condition` ADD PRIMARY KEY (`jia_isu_uuid`, `timestamp`);
