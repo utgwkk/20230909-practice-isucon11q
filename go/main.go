@@ -79,6 +79,8 @@ type Isu struct {
 	UpdatedAt  time.Time `db:"updated_at" json:"-"`
 }
 
+const IsuColumnsExceptImage = "`id`, `jia_isu_uuid`, `name`, `character`, `jia_user_id`, `created_at, `updated_at`"
+
 type IsuFromJIA struct {
 	Character string `json:"character"`
 }
@@ -513,7 +515,7 @@ func getIsuList(c echo.Context) error {
 	isuList := []Isu{}
 	err = tx.SelectContext(ctx,
 		&isuList,
-		"SELECT * FROM `isu` WHERE `jia_user_id` = ? ORDER BY `id` DESC",
+		"SELECT "+IsuColumnsExceptImage+" FROM `isu` WHERE `jia_user_id` = ? ORDER BY `id` DESC",
 		jiaUserID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
@@ -703,7 +705,7 @@ func postIsu(c echo.Context) error {
 	var isu Isu
 	err = tx.GetContext(ctx,
 		&isu,
-		"SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+		"SELECT "+IsuColumnsExceptImage+" FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 		jiaUserID, jiaIsuUUID)
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
@@ -736,7 +738,7 @@ func getIsuID(c echo.Context) error {
 	jiaIsuUUID := c.Param("jia_isu_uuid")
 
 	var res Isu
-	err = db.GetContext(ctx, &res, "SELECT * FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
+	err = db.GetContext(ctx, &res, "SELECT "+IsuColumnsExceptImage+" FROM `isu` WHERE `jia_user_id` = ? AND `jia_isu_uuid` = ?",
 		jiaUserID, jiaIsuUUID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1164,7 +1166,7 @@ func calculateConditionLevel(condition string) (string, error) {
 func getTrend(c echo.Context) error {
 	ctx := c.Request().Context()
 	allIsu := []Isu{}
-	err := db.SelectContext(ctx, &allIsu, "SELECT * FROM `isu`")
+	err := db.SelectContext(ctx, &allIsu, "SELECT "+IsuColumnsExceptImage+" FROM `isu`")
 	if err != nil {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
