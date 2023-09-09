@@ -31,6 +31,7 @@ import (
 	"github.com/labstack/gommon/log"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
@@ -227,8 +228,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to construct exporter: %v", err)
 	}
+	res, err := resource.New(
+		ctx,
+		resource.WithTelemetrySDK(),
+		resource.WithAttributes(
+			semconv.ServiceName("isucon-practice"),
+		),
+	)
+	if err != nil {
+		log.Fatalf("failed to construct resource: %v", err)
+	}
+
 	tp := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
 	)
 	defer tp.Shutdown(ctx)
 	otel.SetTracerProvider(tp)
