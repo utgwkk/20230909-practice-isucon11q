@@ -575,6 +575,14 @@ func getIsuList(c echo.Context) error {
 	return c.JSON(http.StatusOK, responseList)
 }
 
+func pickPostIsuConditionTargetUrl() string {
+	xs := []string{
+		"https://isucondition-1.t.isucon.dev",
+		"https://isucondition-2.t.isucon.dev",
+	}
+	return xs[rand.Intn(len(xs))]
+}
+
 // POST /api/isu
 // ISUを登録
 func postIsu(c echo.Context) error {
@@ -646,7 +654,7 @@ func postIsu(c echo.Context) error {
 	}
 
 	targetURL := getJIAServiceURL(ctx, tx) + "/api/activate"
-	body := JIAServiceRequest{postIsuConditionTargetBaseURL, jiaIsuUUID}
+	body := JIAServiceRequest{pickPostIsuConditionTargetUrl(), jiaIsuUUID}
 	bodyJSON, err := json.Marshal(body)
 	if err != nil {
 		c.Logger().Error(err)
