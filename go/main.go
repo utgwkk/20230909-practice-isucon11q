@@ -1266,6 +1266,7 @@ func postIsuCondition(c echo.Context) error {
 		Insert("isu_condition").
 		Rows(rows).
 		ToSQL()
+	c.Logger().Debugf("bulk insert: %s", query)
 	if err != nil {
 		c.Logger().Errorf("query error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
