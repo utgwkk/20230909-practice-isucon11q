@@ -526,7 +526,7 @@ func getIsuList(c echo.Context) error {
 	}
 	lastConditionByIsuId := make(map[string]IsuCondition)
 	if len(isuIds) > 0 {
-		query, args, err := sqlx.In("SELCT * FROM `isu_last_condition` WHERE `jia_isu_uuid` IN (?)", isuIds)
+		query, args, err := sqlx.In("SELECT * FROM `isu_last_condition` WHERE `jia_isu_uuid` IN (?)", isuIds)
 		if err != nil {
 			c.Logger().Errorf("query error: %v", err)
 			return c.NoContent(http.StatusInternalServerError)
