@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
@@ -1150,16 +1149,9 @@ func calculateConditionLevel(condition string) (string, error) {
 	return conditionLevel, nil
 }
 
-var lastTrendResponse []TrendResponse
-var lastTrendResponseMu sync.Mutex
-
 // GET /api/trend
 // ISUの性格毎の最新のコンディション情報
 func getTrend(c echo.Context) error {
-	if lastTrendResponse != nil {
-		return c.JSON(http.StatusOK, lastTrendResponse)
-	}
-
 	ctx := c.Request().Context()
 	characterList := []Isu{}
 	err := db.SelectContext(ctx, &characterList, "SELECT `character` FROM `isu` GROUP BY `character`")
@@ -1235,10 +1227,6 @@ func getTrend(c echo.Context) error {
 				Critical:  characterCriticalIsuConditions,
 			})
 	}
-
-	lastTrendResponseMu.Lock()
-	lastTrendResponse = res
-	defer lastTrendResponseMu.Unlock()
 
 	return c.JSON(http.StatusOK, res)
 }
