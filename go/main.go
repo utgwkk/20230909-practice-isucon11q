@@ -1262,20 +1262,22 @@ func postIsuCondition(c echo.Context) error {
 		})
 	}
 
-	query, args, err := dialect.
-		Insert("isu_condition").
-		Rows(rows).
-		ToSQL()
-	c.Logger().Debugf("bulk insert: %s", query)
-	if err != nil {
-		c.Logger().Errorf("query error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
-	}
+	if len(rows) > 0 {
+		query, args, err := dialect.
+			Insert("isu_condition").
+			Rows(rows).
+			ToSQL()
+		c.Logger().Debugf("bulk insert: %s", query)
+		if err != nil {
+			c.Logger().Errorf("query error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 
-	_, err = tx.ExecContext(ctx, query, args...)
-	if err != nil {
-		c.Logger().Errorf("db error: %v", err)
-		return c.NoContent(http.StatusInternalServerError)
+		_, err = tx.ExecContext(ctx, query, args...)
+		if err != nil {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
 	}
 
 	err = tx.Commit()
