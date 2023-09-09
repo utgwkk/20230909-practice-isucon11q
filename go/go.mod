@@ -4,7 +4,6 @@ go 1.21
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.19.1
-	github.com/XSAM/otelsql v0.24.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/doug-martin/goqu/v9 v9.18.0
 	github.com/go-sql-driver/mysql v1.6.0
@@ -12,6 +11,7 @@ require (
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/labstack/echo/v4 v4.11.1
 	github.com/labstack/gommon v0.4.0
+	go.nhat.io/otelsql v0.12.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.43.0
 	go.opentelemetry.io/otel v1.17.0
 	go.opentelemetry.io/otel/sdk v1.17.0

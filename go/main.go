@@ -19,7 +19,6 @@ import (
 	"time"
 
 	texporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
-	"github.com/XSAM/otelsql"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/doug-martin/goqu/v9"
 	_ "github.com/doug-martin/goqu/v9/dialect/mysql"
@@ -29,6 +28,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/labstack/gommon/log"
+	"go.nhat.io/otelsql"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -203,11 +203,19 @@ func NewMySQLConnectionEnv() *MySQLConnectionEnv {
 
 func (mc *MySQLConnectionEnv) ConnectDB() (*sqlx.DB, error) {
 	dsn := fmt.Sprintf("%v:%v@tcp(%v:%v)/%v?parseTime=true&loc=Asia%%2FTokyo&interpolateParams=true", mc.User, mc.Password, mc.Host, mc.Port, mc.DBName)
-	dbConn, err := otelsql.Open("mysql", dsn, otelsql.WithAttributes(semconv.DBSystemMySQL))
+	driverName, err := otelsql.Register(
+		"mysql",
+		otelsql.AllowRoot(),
+		otelsql.TraceQueryWithArgs(),
+		otelsql.TraceRowsClose(),
+		otelsql.TraceRowsAffected(),
+		otelsql.WithDatabaseName("isucondition"),
+		otelsql.WithSystem(semconv.DBSystemMySQL),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect DB: %w", err)
 	}
-	return sqlx.NewDb(dbConn, "mysql"), nil
+	return sqlx.Open(driverName, dsn)
 }
 
 func init() {
