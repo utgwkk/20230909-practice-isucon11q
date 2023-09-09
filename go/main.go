@@ -1271,6 +1271,12 @@ func postIsuCondition(c echo.Context) error {
 	logger := c.Echo().Logger
 	go func() {
 		ctx := context.WithoutCancel(ctx)
+		tx, err := db.Beginx()
+		if err != nil {
+			logger.Errorf("db error: %v", err)
+			return
+		}
+		defer tx.Rollback()
 		var rows []IsuCondition
 		for _, cond := range req {
 			timestamp := time.Unix(cond.Timestamp, 0)
@@ -1297,7 +1303,7 @@ func postIsuCondition(c echo.Context) error {
 		}
 
 		if len(rows) > 0 {
-			_, err = db.NamedExecContext(ctx,
+			_, err = tx.NamedExecContext(ctx,
 				"INSERT INTO `isu_condition`"+
 					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
 					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
@@ -1312,7 +1318,7 @@ func postIsuCondition(c echo.Context) error {
 				return rows[i].Timestamp.Before(rows[j].Timestamp)
 			})
 			lastData := rows[len(rows)-1]
-			_, err = db.NamedExecContext(ctx,
+			_, err = tx.NamedExecContext(ctx,
 				"INSERT INTO `isu_last_condition`"+
 					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
 					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"+
@@ -1327,6 +1333,11 @@ func postIsuCondition(c echo.Context) error {
 				logger.Errorf("db error: %v", err)
 				return
 			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			logger.Errorf("db error: %v", err)
+			return
 		}
 	}()
 
