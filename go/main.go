@@ -520,21 +520,31 @@ func getIsuList(c echo.Context) error {
 		c.Logger().Errorf("db error: %v", err)
 		return c.NoContent(http.StatusInternalServerError)
 	}
+	isuIds := make([]string, len(isuList))
+	for i, isu := range isuList {
+		isuIds[i] = isu.JIAIsuUUID
+	}
+	lastConditionByIsuId := make(map[string]IsuCondition)
+	if len(isuIds) > 0 {
+		query, args, err := sqlx.In("SELCT * FROM `isu_last_condition` WHERE `jia_isu_uuid` IN (?)")
+		if err != nil {
+			c.Logger().Errorf("query error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		conditions := []IsuCondition{}
+		if err := tx.SelectContext(ctx, &conditions, query, args...); err != nil {
+			c.Logger().Errorf("db error: %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+
+		for _, cond := range conditions {
+			lastConditionByIsuId[cond.JIAIsuUUID] = cond
+		}
+	}
 
 	responseList := []GetIsuListResponse{}
 	for _, isu := range isuList {
-		var lastCondition IsuCondition
-		foundLastCondition := true
-		err = tx.GetContext(ctx, &lastCondition, "SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ? ORDER BY `timestamp` DESC LIMIT 1",
-			isu.JIAIsuUUID)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				foundLastCondition = false
-			} else {
-				c.Logger().Errorf("db error: %v", err)
-				return c.NoContent(http.StatusInternalServerError)
-			}
-		}
+		lastCondition, foundLastCondition := lastConditionByIsuId[isu.JIAIsuUUID]
 
 		var formattedCondition *GetIsuConditionResponse
 		if foundLastCondition {
@@ -1292,6 +1302,27 @@ func postIsuCondition(c echo.Context) error {
 					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
 					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
 				rows)
+			if err != nil {
+				logger.Errorf("db error: %v", err)
+				return
+			}
+
+			// timestampでソート
+			sort.SliceStable(rows, func(i, j int) bool {
+				return rows[i].Timestamp.Before(rows[j].Timestamp)
+			})
+			lastData := rows[len(rows)-1]
+			_, err = db.NamedExecContext(ctx,
+				"INSERT INTO `isu_last_condition`"+
+					"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
+					"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)"+
+					"   ON DUPLICATE KEY UPDATE "+
+					"`timestamp` = VALUES(`timestamp`), "+
+					"`is_sitting` = VALUES(`is_sitting`), "+
+					"`condition` = VALUES(`condition`), "+
+					"`condition_level` = VALUES(`condition_level`), "+
+					"`message` = VALUES(`message`), ",
+				lastData)
 			if err != nil {
 				logger.Errorf("db error: %v", err)
 				return
