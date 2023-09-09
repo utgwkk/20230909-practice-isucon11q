@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS `isu`;
 DROP TABLE IF EXISTS `user`;
 
 CREATE TABLE `isu` (
-  `id` bigint AUTO_INCREMENT,
+  `id` bigint not null,
   `jia_isu_uuid` CHAR(36) NOT NULL UNIQUE,
   `name` VARCHAR(255) NOT NULL,
   `image` LONGBLOB,
