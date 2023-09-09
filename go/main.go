@@ -34,6 +34,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -92,13 +93,14 @@ type GetIsuListResponse struct {
 }
 
 type IsuCondition struct {
-	ID         int       `db:"id"`
-	JIAIsuUUID string    `db:"jia_isu_uuid"`
-	Timestamp  time.Time `db:"timestamp"`
-	IsSitting  bool      `db:"is_sitting"`
-	Condition  string    `db:"condition"`
-	Message    string    `db:"message"`
-	CreatedAt  time.Time `db:"created_at"`
+	ID             int       `db:"id"`
+	JIAIsuUUID     string    `db:"jia_isu_uuid"`
+	Timestamp      time.Time `db:"timestamp"`
+	IsSitting      bool      `db:"is_sitting"`
+	Condition      string    `db:"condition"`
+	ConditionLevel string    `db:"condition_level"`
+	Message        string    `db:"message"`
+	CreatedAt      time.Time `db:"created_at"`
 }
 
 type MySQLConnectionEnv struct {
@@ -1052,27 +1054,41 @@ func getIsuConditions(c echo.Context) error {
 func getIsuConditionsFromDB(ctx context.Context, db *sqlx.DB, jiaIsuUUID string, endTime time.Time, conditionLevel map[string]interface{}, startTime time.Time,
 	limit int, isuName string) ([]*GetIsuConditionResponse, error) {
 
+	filterConditionLevels := maps.Keys(conditionLevel)
+
 	conditions := []IsuCondition{}
-	var err error
 
 	if startTime.IsZero() {
-		err = db.SelectContext(ctx, &conditions,
+		query, args, err := sqlx.In(
 			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
-				"	ORDER BY `timestamp` DESC",
-			jiaIsuUUID, endTime,
+				"	AND `condition_level` IN (?)"+
+				"	ORDER BY `timestamp` DESC LIMIT ?",
+			jiaIsuUUID, filterConditionLevels, endTime, limit,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("query error: %v", err)
+		}
+		err = db.SelectContext(ctx, &conditions, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("db error: %v", err)
+		}
 	} else {
-		err = db.SelectContext(ctx, &conditions,
+		query, args, err := sqlx.In(
 			"SELECT * FROM `isu_condition` WHERE `jia_isu_uuid` = ?"+
 				"	AND `timestamp` < ?"+
 				"	AND ? <= `timestamp`"+
-				"	ORDER BY `timestamp` DESC",
-			jiaIsuUUID, endTime, startTime,
+				"	AND `condition_level` IN (?)"+
+				"	ORDER BY `timestamp` DESC LIMIT ?",
+			jiaIsuUUID, endTime, startTime, filterConditionLevels, limit,
 		)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("db error: %v", err)
+		if err != nil {
+			return nil, fmt.Errorf("query error: %v", err)
+		}
+		err = db.SelectContext(ctx, &conditions, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("db error: %v", err)
+		}
 	}
 
 	conditionsResponse := []*GetIsuConditionResponse{}
@@ -1253,20 +1269,26 @@ func postIsuCondition(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
+		conditionLevel, err := calculateConditionLevel(cond.Condition)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "bad request body")
+		}
+
 		rows = append(rows, IsuCondition{
-			JIAIsuUUID: jiaIsuUUID,
-			Timestamp:  timestamp,
-			IsSitting:  cond.IsSitting,
-			Condition:  cond.Condition,
-			Message:    cond.Message,
+			JIAIsuUUID:     jiaIsuUUID,
+			Timestamp:      timestamp,
+			IsSitting:      cond.IsSitting,
+			Condition:      cond.Condition,
+			ConditionLevel: conditionLevel,
+			Message:        cond.Message,
 		})
 	}
 
 	if len(rows) > 0 {
 		_, err = tx.NamedExecContext(ctx,
 			"INSERT INTO `isu_condition`"+
-				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)"+
-				"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :message)",
+				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
+				"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
 			rows)
 		if err != nil {
 			c.Logger().Errorf("db error: %v", err)
