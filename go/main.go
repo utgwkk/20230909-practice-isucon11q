@@ -1064,7 +1064,7 @@ func getIsuConditionsFromDB(ctx context.Context, db *sqlx.DB, jiaIsuUUID string,
 				"	AND `timestamp` < ?"+
 				"	AND `condition_level` IN (?)"+
 				"	ORDER BY `timestamp` DESC LIMIT ?",
-			jiaIsuUUID, filterConditionLevels, endTime, limit,
+			jiaIsuUUID, endTime, filterConditionLevels, limit,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("query error: %v", err)
