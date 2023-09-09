@@ -24,7 +24,7 @@ CREATE TABLE `isu_condition` (
   `message` VARCHAR(255) NOT NULL,
   `created_at` DATETIME(6) DEFAULT CURRENT_TIMESTAMP(6),
   PRIMARY KEY(`id`),
-  KEY `jia_isu_uuid_timestamp` ON `isu_condition` (`jia_isu_uuid`, `timestamp` DESC)
+  KEY `jia_isu_uuid_timestamp` (`jia_isu_uuid`, `timestamp` DESC)
 ) ENGINE=InnoDB DEFAULT CHARACTER SET=utf8mb4;
 
 CREATE TABLE `user` (
