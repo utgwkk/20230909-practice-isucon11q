@@ -1245,6 +1245,7 @@ func postIsuCondition(c echo.Context) error {
 		return c.String(http.StatusNotFound, "not found: isu")
 	}
 
+	var rows []goqu.Record
 	for _, cond := range req {
 		timestamp := time.Unix(cond.Timestamp, 0)
 
@@ -1252,16 +1253,28 @@ func postIsuCondition(c echo.Context) error {
 			return c.String(http.StatusBadRequest, "bad request body")
 		}
 
-		_, err = tx.ExecContext(ctx,
-			"INSERT INTO `isu_condition`"+
-				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `message`)"+
-				"	VALUES (?, ?, ?, ?, ?)",
-			jiaIsuUUID, timestamp, cond.IsSitting, cond.Condition, cond.Message)
-		if err != nil {
-			c.Logger().Errorf("db error: %v", err)
-			return c.NoContent(http.StatusInternalServerError)
-		}
+		rows = append(rows, goqu.Record{
+			"jia_isu_uuid": jiaIsuUUID,
+			"timestamp":    timestamp,
+			"is_sitting":   cond.IsSitting,
+			"condition":    cond.Condition,
+			"message":      cond.Message,
+		})
+	}
 
+	query, args, err := dialect.
+		Insert("isu_condition").
+		Rows(rows).
+		ToSQL()
+	if err != nil {
+		c.Logger().Errorf("query error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+
+	_, err = tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		c.Logger().Errorf("db error: %v", err)
+		return c.NoContent(http.StatusInternalServerError)
 	}
 
 	err = tx.Commit()
