@@ -371,6 +371,29 @@ func postInitialize(c echo.Context) error {
 		return c.NoContent(http.StatusInternalServerError)
 	}
 
+	allConditions := []IsuCondition{}
+	if err := db.SelectContext(ctx, &allConditions, "SELECT * FROM `isu_condition`"); err != nil {
+		c.Logger().Errorf("db error : %v", err)
+		return c.NoContent(http.StatusInternalServerError)
+	}
+	latestConditionById := make(map[string]IsuCondition)
+	for _, cond := range allConditions {
+		if cond.Timestamp.After(latestConditionById[cond.JIAIsuUUID].Timestamp) {
+			latestConditionById[cond.JIAIsuUUID] = cond
+		}
+	}
+	if len(allConditions) > 0 {
+		if _, err := db.NamedExecContext(ctx,
+			"INSERT INTO `isu_last_condition`"+
+				"	(`jia_isu_uuid`, `timestamp`, `is_sitting`, `condition`, `condition_level`, `message`)"+
+				"	VALUES (:jia_isu_uuid, :timestamp, :is_sitting, :condition, :condition_level, :message)",
+			allConditions,
+		); err != nil {
+			c.Logger().Errorf("db error : %v", err)
+			return c.NoContent(http.StatusInternalServerError)
+		}
+	}
+
 	_, err = db.ExecContext(ctx,
 		"INSERT INTO `isu_association_config` (`name`, `url`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `url` = VALUES(`url`)",
 		"jia_service_url",
